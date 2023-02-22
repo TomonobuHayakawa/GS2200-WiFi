@@ -1,5 +1,5 @@
 /*
- *  MQTT Library for GS2200
+ *  HTTTP Library for GS2200
  *  Copyright 2023 Spresense Users
  *
  *  This library is free software; you can redistribute it and/or

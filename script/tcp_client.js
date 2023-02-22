@@ -1,6 +1,6 @@
 var net = require('net');
 
-var port = 10001;
+var port = 80;
 var client = new net.Socket();
 
 client.setEncoding('utf8');

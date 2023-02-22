@@ -63,7 +63,14 @@ public:
 	 * Connect TCP server
 	 */
 	char connect(const String& ip, const String& port);
-
+	/**
+	 * Start TCP server
+	 */
+	char start(char* port);
+	/**
+	 * Wait for TCP client connection
+	 */
+	bool wait_connection(char *cid, uint32_t timeout);
 	/**
 	 * Connect UDP server
 	 */
