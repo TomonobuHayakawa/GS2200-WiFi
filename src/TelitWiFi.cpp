@@ -393,9 +393,12 @@ bool TelitWiFi::connected(char cid)
  */
 bool TelitWiFi::write(char cid, const uint8_t* data, uint16_t length)
 {
-	if( ATCMD_RESP_OK != AtCmd_SendBulkData( cid, data, length )){
+	ATCMD_RESP_E resp;
+
+	resp = AtCmd_SendBulkData(cid, data, length);
+	if( ATCMD_RESP_OK != resp){
 		// Data is not sent, we need to re-send the data
-		gs2200_printf( "Send Error.");
+		gs2200_printf( "Send Error.resp = %d\n", resp);
 		return false;
 	}
 

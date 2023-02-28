@@ -96,26 +96,25 @@ void loop() {
     }
     
     ConsoleLog("TCP Client Connected");
+    // Prepare for the next chunck of incoming data
+    WiFi_InitESCBuffer();
     sleep(1);
 
     // Start the echo server
-    while (1) {
-      if (gs2200.available()) {
-        if (0 < gs2200.read(remote_cid, Receive_Data, RECEIVE_PACKET_SIZE)) {
-            ConsolePrintf("Received : %s\r\n", Receive_Data);
-            String message = (char*)Receive_Data;
-            if (message.substring(0, message.indexOf(' ')) == "GET") {
-              int length = send_contents(Receive_Data, RECEIVE_PACKET_SIZE);        
-              ConsolePrintf("Will send : %s\r\n", Receive_Data);
-              if (true != gs2200.write(remote_cid, Receive_Data, length)) {
-                // Data is not sent, we need to re-send the data
-                delay(10);
-                ConsolePrintf("Sent Error : %s\r\n", Receive_Data);
-              }
-            }
+    while (gs2200.available()) {
+      if (0 < gs2200.read(remote_cid, Receive_Data, RECEIVE_PACKET_SIZE)) {
+        ConsolePrintf("Received : %s\r\n", Receive_Data);
+        String message = (char*)Receive_Data;
+        if (message.substring(0, message.indexOf(' ')) == "GET") {
+          int length = send_contents(Receive_Data, RECEIVE_PACKET_SIZE);
+          ConsolePrintf("Will send : %s\r\n", Receive_Data);
+          if (true != gs2200.write(remote_cid, Receive_Data, length)) {
+            // Data is not sent, we need to re-send the data
+            delay(10);
+            ConsolePrintf("Sent Error : %s\r\n", Receive_Data);
+          }
         }
         WiFi_InitESCBuffer();
-        break;
       }
     }
   }
