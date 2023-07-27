@@ -52,7 +52,7 @@ private:
   TelitWiFi* mWifi;
   char mCid;
 
-  uint16_t mChannelId;
+  uint32_t mChannelId;
   String mWriteKey;
 
   struct {
