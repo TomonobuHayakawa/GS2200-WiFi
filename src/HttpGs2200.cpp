@@ -19,7 +19,7 @@
 
 #include "HttpGs2200.h"
 
-#define ENABLE_HTTP_DEBUG
+// #define ENABLE_HTTP_DEBUG
 
 #ifdef ENABLE_HTTP_DEBUG
 #define HTTP_DEBUG(...)    \
@@ -174,6 +174,8 @@ bool HttpGs2200::receive(uint64_t timeout)
 	ATCMD_RESP_E resp = ATCMD_RESP_UNMATCH;
 	bool result = false;
 	uint64_t start = millis();
+	WiFi_InitESCBuffer();
+
 	while (1) {
 		if (mWifi->available()) {
 			resp = AtCmd_RecvResponse();

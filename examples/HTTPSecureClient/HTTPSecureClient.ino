@@ -23,6 +23,7 @@
 #include <RTC.h>
 
 #define  CONSOLE_BAUDRATE  115200
+#define  TIMEOUT  5000  /*5000 ms*/
 
 typedef enum{
 	POST=0,
@@ -128,8 +129,8 @@ void loop() {
 				printf("theHttpGs2200.receive err.\n");
 			}
 			/* Need to receive the HTTP response */
-			/* Timeout for 2000ms*/
-			result = theHttpGs2200.receive(2000);
+			/* Timeout for TIMEOUT ms*/
+			result = theHttpGs2200.receive(TIMEOUT);
 			result = theHttpGs2200.end();
 
 			delay(1000);
@@ -147,14 +148,16 @@ void loop() {
 			} else {
 				ConsoleLog( "?? Unexpected HTTP Response ??" );
 			}
-			result = theHttpGs2200.receive(2000);
-			if (false == result) {
-				theHttpGs2200.read_data(Receive_Data, RECEIVE_PACKET_SIZE);
-				ConsolePrintf("%s", (char *)(Receive_Data));
-			} else {
-				// AT+HTTPSEND command is done
-				ConsolePrintf( "\r\n");
-			}
+			do {
+				result = theHttpGs2200.receive(TIMEOUT);
+				if (false == result) {
+					theHttpGs2200.read_data(Receive_Data, RECEIVE_PACKET_SIZE);
+					ConsolePrintf("%s", (char *)(Receive_Data));
+				} else {
+					// AT+HTTPSEND command is done
+					ConsolePrintf( "\r\n");
+				}
+			} while (result == false);
 
 			result = theHttpGs2200.end();
 
