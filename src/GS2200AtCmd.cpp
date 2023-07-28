@@ -27,7 +27,7 @@
 /*-------------------------------------------------------------------------*
  * Constants:
  *-------------------------------------------------------------------------*/
-#define SPI_MAX_SIZE   1400
+#define SPI_MAX_SIZE   1500
 #define TXBUFFER_SIZE  SPI_MAX_SIZE
 #define RXBUFFER_SIZE  1500
 
@@ -1969,7 +1969,7 @@ ATCMD_RESP_E AtCmd_TCERTADD( char* name, int format, int location, File fp )
 /*---------------------------------------------------------------------------*
  * AtCmd_TCERTADD
  *---------------------------------------------------------------------------*/
-ATCMD_RESP_E AtCmd_TCERTADD( char* name, int format, int location, uint8_t ptr, int size )
+ATCMD_RESP_E AtCmd_TCERTADD( char* name, int format, int location, uint8_t* ptr, int size )
 {
 	ATCMD_RESP_E resp=ATCMD_RESP_UNMATCH;
 	SPI_RESP_STATUS_E s;
