@@ -19,11 +19,7 @@
 
 #include "HttpGs2200.h"
 
-<<<<<<< HEAD
-// #define ENABLE_HTTP_DEBUG
-=======
 //#define ENABLE_HTTP_DEBUG
->>>>>>> 83d6995560dfff90a5389b5dc1e9fd4979570cf8
 
 #ifdef ENABLE_HTTP_DEBUG
 #define HTTP_DEBUG(...)    \
