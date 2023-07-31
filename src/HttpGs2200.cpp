@@ -19,7 +19,7 @@
 
 #include "HttpGs2200.h"
 
-#define ENABLE_HTTP_DEBUG
+//#define ENABLE_HTTP_DEBUG
 
 #ifdef ENABLE_HTTP_DEBUG
 #define HTTP_DEBUG(...)    \
@@ -135,13 +135,21 @@ bool HttpGs2200::send(ATCMD_HTTP_METHOD_E type, uint8_t timeout, const char *pag
 {
 	ATCMD_RESP_E resp = ATCMD_RESP_UNMATCH;
 	bool result = false;
+	int retry = 10;
 	while (1) {
 		resp = AtCmd_HTTPSEND(mCid, type, timeout, page, msg, size);
 		if (ATCMD_RESP_OK == resp || ATCMD_RESP_BULK_DATA_RX == resp) {
 			result = true;
 			break;
 		} else {
-			continue;
+			if(retry > 0){
+				retry--;
+				sleep(1);
+				continue;
+			}else{
+				result = false;
+				break;
+			}
 		}
 	}
 	return result;
@@ -173,11 +181,12 @@ bool HttpGs2200::receive(uint64_t timeout)
 {
 	ATCMD_RESP_E resp = ATCMD_RESP_UNMATCH;
 	bool result = false;
+	WiFi_InitESCBuffer();
 	uint64_t start = millis();
 	while (1) {
 		if (mWifi->available()) {
 			resp = AtCmd_RecvResponse();
-			if (ATCMD_RESP_OK == resp) {
+			if (ATCMD_RESP_BULK_DATA_RX == resp) {
 				result = true;
 				break;
 			} else {
@@ -208,7 +217,9 @@ bool HttpGs2200::post(const char* url_path, const char* body) {
 
 	HTTP_DEBUG("POST Start");
 	result = connect();
-	
+
+	WiFi_InitESCBuffer();
+
 	HTTP_DEBUG("Socket Open");
 	result = send(HTTP_METHOD_POST, 10, url_path, body, strlen(body));
 
@@ -221,6 +232,8 @@ bool HttpGs2200::get(const char* url_path) {
 	HTTP_DEBUG("GET Start");
 	result = connect();
 	
+	WiFi_InitESCBuffer();
+
 	HTTP_DEBUG("Open Socket");
 	result = send(HTTP_METHOD_GET, 10, url_path, "", 0);
 

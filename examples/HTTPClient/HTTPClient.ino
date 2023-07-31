@@ -37,8 +37,6 @@ TWIFI_Params gsparams;
 HttpGs2200 theHttpGs2200(&gs2200);
 HTTPGS2200_HostParams hostParams;
 
-int count = 0;
-
 void parse_httpresponse(char *message)
 {
 	char *p;
@@ -92,6 +90,7 @@ void setup() {
 void loop() {
 	httpStat = POST;
 	bool result = false;
+	static int count = 0;
 
 	while (1) {
 		switch (httpStat) {
@@ -100,15 +99,21 @@ void loop() {
 			//create post data.
 			snprintf(sendData, sizeof(sendData), "data=%d", count);
 			result = theHttpGs2200.post(HTTP_POST_PATH, sendData);
-
-			if (0 < theHttpGs2200.receive(Receive_Data, RECEIVE_PACKET_SIZE)) {
-				parse_httpresponse( (char *)(Receive_Data) );
-			} else {
-				printf("theHttpGs2200.receive err.\n");
+			if (false == result) {
+				break;
 			}
-			/* Need to receive the HTTP response */
-			/* Timeout for 2000ms*/
-			result = theHttpGs2200.receive(2000);
+
+			do {
+				result = theHttpGs2200.receive(5000);
+				if (result) {
+					theHttpGs2200.read_data(Receive_Data, RECEIVE_PACKET_SIZE);
+					ConsolePrintf("%s", (char *)(Receive_Data));
+				} else {
+					// AT+HTTPSEND command is done
+					ConsolePrintf( "\r\n");
+				}
+			} while (result);
+
 			result = theHttpGs2200.end();
 
 			delay(1000);
@@ -126,14 +131,17 @@ void loop() {
 			} else {
 				ConsoleLog( "?? Unexpected HTTP Response ??" );
 			}
-			result = theHttpGs2200.receive(2000);
-			if (false == result) {
-				theHttpGs2200.read_data(Receive_Data, RECEIVE_PACKET_SIZE);
-				ConsolePrintf("%s", (char *)(Receive_Data));
-			} else {
-				// AT+HTTPSEND command is done
-				ConsolePrintf( "\r\n");
-			}
+
+ 			do {
+				result = theHttpGs2200.receive(2000);
+				if (result) {
+					theHttpGs2200.read_data(Receive_Data, RECEIVE_PACKET_SIZE);
+					ConsolePrintf("%s", (char *)(Receive_Data));
+				} else {
+					// AT+HTTPSEND command is done
+					ConsolePrintf( "\r\n");
+				}
+			} while (result);
 
 			result = theHttpGs2200.end();
 
