@@ -23,9 +23,9 @@
 #define  AP_SSID        "AP_SSID_NAME"
 #define  PASSPHRASE     "123456789"
 
-#define  UDPSRVR_IP     "192.168.11.144"
+#define  UDPSRVR_IP     "192.168.2.109"
 #define  UDPSRVR_PORT   "10001"
 
-#define  LocalPort      "10001"
+#define  LocalPort      "10002"
 
 #endif /*_CONFIG_H_*/
