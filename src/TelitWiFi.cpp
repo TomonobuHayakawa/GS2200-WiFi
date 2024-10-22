@@ -350,7 +350,7 @@ void TelitWiFi::stop(char cid)
 {
 	ATCMD_RESP_E resp;
 
-	while( !Get_GPIO37Status() );
+	AtCmd_WD();
 
 	while( Get_GPIO37Status() ){
 		resp = AtCmd_RecvResponse();
@@ -363,9 +363,15 @@ void TelitWiFi::stop(char cid)
 			resp = AtCmd_NCLOSE( cid );
 			resp = AtCmd_NCLOSEALL();
 			WiFi_InitESCBuffer();
+		}else if( ATCMD_RESP_OK == resp ){
+			puts("OK!");
+			resp = AtCmd_NCLOSE( cid );
+			resp = AtCmd_NCLOSEALL();
+		}else {
+			puts("stop error!");
 		}
 
-		sleep(2);
+		usleep(100*1000);
 
 	}
 
@@ -399,8 +405,32 @@ bool TelitWiFi::write(char cid, const uint8_t* data, uint16_t length)
 	if( ATCMD_RESP_OK != resp){
 		// Data is not sent, we need to re-send the data
 		gs2200_printf( "Send Error.resp = %d\n", resp);
+		version();
 		return false;
 	}
+
+	return true;
+
+}
+
+bool TelitWiFi::version()
+{
+	ATCMD_RESP_E resp = ATCMD_RESP_UNMATCH;
+
+	do{
+		resp = AtCmd_VER();
+	}while(ATCMD_RESP_OK != resp);
+	
+	return true;
+}
+
+bool TelitWiFi::reset()
+{
+	ATCMD_RESP_E resp = ATCMD_RESP_UNMATCH;
+
+	do{
+		resp = AtCmd_RESET();
+	}while(ATCMD_RESP_NORMAL_BOOT_MSG != resp);
 
 	return true;
 

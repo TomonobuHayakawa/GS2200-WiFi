@@ -173,32 +173,47 @@ static void SpiMakeHeader(uint8_t *buff, uint16_t dataLength, uint8_t request )
 
 static void Read_HeaderResponse(uint8_t* buff)
 {
+    irqstate_t flags = enter_critical_section();
 	for(int i=0; i<HEADER_LENGTH; i++)
 		*buff++ = SPI_DATA_TRANSFER(SPI_IDLE_CHAR);
+   leave_critical_section(flags);
 }
 
 
 static void Write_Header(uint8_t* TxBuffer)
 {
+    irqstate_t flags = enter_critical_section();
 	for(int i=0; i<HEADER_LENGTH; i++)
 		SPI_DATA_TRANSFER(*TxBuffer++);
+    leave_critical_section(flags);
 }
 
 
 static void Write_Header_Half(uint8_t* TxBuffer)
 {
+    irqstate_t flags = enter_critical_section();
 	for(int i=0; i<HALF_HEADER_LENGTH; i++)
 		SPI_DATA_TRANSFER(*TxBuffer++);
+    leave_critical_section(flags);
 }
 
 
 static void Write_Data(uint8_t* TxBuffer, uint16_t dataLen)
 {
+    irqstate_t flags = enter_critical_section();
 	for(int i=0; i<dataLen; i++)
 		SPI_DATA_TRANSFER(*TxBuffer++);
+//		SPI_DATA_TRANSFER(TxBuffer,dataLen);
+    leave_critical_section(flags);
 }
-   
 
+static void Read_Data(uint8_t* RxBuffer, uint16_t dataLen)
+{
+    irqstate_t flags = enter_critical_section();
+	for(int i=0; i<dataLen; i++)
+		*RxBuffer++ = SPI_DATA_TRANSFER(SPI_IDLE_CHAR);
+    leave_critical_section(flags);
+}
 
 /*---------------------------------------------------------------------------*
  * WiFi_Write
@@ -215,9 +230,12 @@ SPI_RESP_STATUS_E WiFi_Write(const void *txData, uint16_t dataLength)
 	uint16_t recvLen;
 	uint32_t start = millis();
 
-	
+
 	// Make HI Header
 	SpiMakeHeader(spiHeaderBuff, dataLength, WRITE_REQUEST);
+
+    irqstate_t flags = enter_critical_section();
+
 	// send first half of WRITE_REQUEST to GS2200	
 	Write_Header_Half(spiHeaderBuff);
 	// wait for at least 3.2usec
@@ -225,9 +243,12 @@ SPI_RESP_STATUS_E WiFi_Write(const void *txData, uint16_t dataLength)
 	// send last half of WRITE_REQUEST to GS2200
 	Write_Header_Half(spiHeaderBuff+HALF_HEADER_LENGTH); 
 	// Wait for the response from GS2200
+
+    leave_critical_section(flags);
+
 	while(!Get_GPIO37Status()){
-		if( msDelta(start) > SPI_TIMEOUT )
-			return SPI_RESP_STATUS_TIMEOUT;
+		if( msDelta(start) > SPI_TIMEOUT ){
+			return SPI_RESP_STATUS_TIMEOUT;}
 	}
 
 	// Read the response from GS2200
@@ -237,10 +258,13 @@ SPI_RESP_STATUS_E WiFi_Write(const void *txData, uint16_t dataLength)
 	//check response for write_request and also the check the size of data GS2000 can receive
 	if((WRITE_RESPONSE_OK == hiResponse[1]) && (dataLength == recvLen) )
 	{	 
-		SpiMakeHeader(spiHeaderBuff, dataLength, DATA_FROM_MCU);  // make the data class(0x03) hearder		
+		SpiMakeHeader(spiHeaderBuff, dataLength, DATA_FROM_MCU);  // make the data class(0x03) hearder
+        irqstate_t flags = enter_critical_section();
+
 		Write_Header(spiHeaderBuff);                              // send the header
 		Write_Data((uint8_t*)tx, dataLength);                     // send the data to GS
 
+        leave_critical_section(flags);
 		return SPI_RESP_STATUS_OK;
 	}
 	else
@@ -255,7 +279,6 @@ SPI_RESP_STATUS_E WiFi_Write(const void *txData, uint16_t dataLength)
 		return SPI_RESP_STATUS_ERROR;
 	}
 }
-
 
 /*-------------------------------------------------------------------------*
  * Read Functions
@@ -300,11 +323,6 @@ static uint16_t Read_DataLen(void)
 }
 
 
-static void Read_Data(uint8_t* RxBuffer, uint16_t dataLen)
-{
-	for(int i=0; i<dataLen; i++)
-		*RxBuffer++ = SPI_DATA_TRANSFER(SPI_IDLE_CHAR);
-}
 
 
 /*---------------------------------------------------------------------------*

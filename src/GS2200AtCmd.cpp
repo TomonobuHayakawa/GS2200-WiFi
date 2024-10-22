@@ -323,7 +323,13 @@ ATCMD_RESP_E AtCmd_AT(void)
  *---------------------------------------------------------------------------*/
 ATCMD_RESP_E AtCmd_VER(void)
 {
-	return AtCmd_SendCommand( (char *)"AT+VER=??\r\n");
+	ATCMD_RESP_E resp = AtCmd_SendCommand( (char *)"AT+VER=??\r\n");
+	if( resp == ATCMD_RESP_OK ){
+		puts("at command version");
+		printf("%s\n",RespBuffer[0]);
+	}
+	return resp;
+//	return AtCmd_SendCommand( (char *)"AT+VER=??\r\n");
 }
 
 /*---------------------------------------------------------------------------*

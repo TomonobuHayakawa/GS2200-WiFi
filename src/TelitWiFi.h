@@ -103,6 +103,9 @@ public:
 	 */
 	int read(char cid, uint8_t* data, int length);
 
+	bool reset();
+	bool version();
+
 };
 
 #endif /*_TELITWIFI_H_*/
