@@ -48,6 +48,12 @@ TelitWiFi::~TelitWiFi()
  */
 int TelitWiFi::begin(TWIFI_Params params)
 {
+	TWIFI_Adress dmy;
+	return begin(params, true, dmy);
+}
+
+int TelitWiFi::begin(TWIFI_Params params, bool is_dhcp, TWIFI_Adress adrs)
+{
 	ATCMD_RESP_E r = ATCMD_RESP_UNMATCH;
 	ATCMD_REGDOMAIN_E regDomain;
 	char macid[20];
@@ -118,11 +124,16 @@ int TelitWiFi::begin(TWIFI_Params params)
 			r = AtCmd_DHCPSRVR( 1 );
 			if( ATCMD_RESP_OK != r ) continue;
 			
-		}
-		else{
+		} else {
+			if(is_dhcp){
 			/* Enable DHCP Client */
-			r = AtCmd_NDHCP( 1 );
-			if( ATCMD_RESP_OK != r ) continue;
+				r = AtCmd_NDHCP( 1 );
+				if( ATCMD_RESP_OK != r ) continue;
+			} else {
+				r =  AtCmd_NSET(adrs.device, adrs.subnet, adrs.gateway);
+				if( ATCMD_RESP_OK != r ) continue;
+			}
+
 		}
 		
 		/* Bulk Data mode */
@@ -152,10 +163,6 @@ int TelitWiFi::activate_station(const String& ssid, const String& passphrase)
 
 		/* Try to disassociate if not already associated */
 		r = AtCmd_WD(); 
-		if( ATCMD_RESP_OK != r ) continue;
-
-		/* Enable DHCP Client */
-		r = AtCmd_NDHCP( 1 );
 		if( ATCMD_RESP_OK != r ) continue;
 
 		/* Set WPA2 Passphrase */

@@ -27,6 +27,12 @@ typedef struct {
 	ATCMD_PSAVE_E psave;
 } TWIFI_Params;
 
+typedef struct {
+	char device[64];
+	char subnet[64];
+	char gateway[64];
+} TWIFI_Adress;
+
 
 /**
  * @class TelitWiFi
@@ -52,6 +58,7 @@ public:
 	 *  GS2000 Initialization 
 	 */
 	int begin(TWIFI_Params params);
+	int begin(TWIFI_Params params, bool is_dhcp, TWIFI_Adress adrs);
 
 	/**
 	 *  AP association (station mode), AP creation (Limited-AP mode)

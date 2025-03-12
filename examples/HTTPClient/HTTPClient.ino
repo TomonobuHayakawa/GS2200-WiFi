@@ -21,6 +21,8 @@
 
 #define  CONSOLE_BAUDRATE  115200
 
+#define  USE_DHCP
+
 typedef enum{
 	POST=0,
 	GET
@@ -36,6 +38,7 @@ TelitWiFi gs2200;
 TWIFI_Params gsparams;
 HttpGs2200 theHttpGs2200(&gs2200);
 HTTPGS2200_HostParams hostParams;
+TWIFI_Adress adrs;
 
 void parse_httpresponse(char *message)
 {
@@ -59,7 +62,15 @@ void setup() {
 	/* Initialize AT Command Library Buffer */
 	gsparams.mode = ATCMD_MODE_STATION;
 	gsparams.psave = ATCMD_PSAVE_DEFAULT;
+
+#ifdef USE_DHCP
 	if (gs2200.begin(gsparams)) {
+#else
+	strcpy(adrs.device, DEVICE_IP);
+	strcpy(adrs.gateway, GATWAY_IP);
+	strcpy(adrs.subnet, SUBNET_MASK);
+	if (gs2200.begin(gsparams,false,adrs)) {
+#endif
 		ConsoleLog("GS2200 Initilization Fails");
 		while (1);
 	}

@@ -23,9 +23,13 @@
 #define  AP_SSID        "linksys"
 #define  PASSPHRASE     "0123456789"
 
-#define  HTTP_SRVR_IP  "192.168.1.100"
-#define  HTTP_PORT     "10080"
-#define  HTTP_GET_PATH "/"
+#define  HTTP_SRVR_IP   "192.168.1.100"
+#define  HTTP_PORT      "10080"
+#define  HTTP_GET_PATH  "/"
 #define  HTTP_POST_PATH "/postData"
+
+#define  DEVICE_IP      "192.168.43.20"
+#define  GATWAY_IP      "192.168.43.1"
+#define  SUBNET_MASK    "255.255.255.0"
 
 #endif /*_CONFIG_H_*/
