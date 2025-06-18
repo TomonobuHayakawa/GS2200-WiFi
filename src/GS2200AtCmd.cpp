@@ -1160,7 +1160,7 @@ ATCMD_RESP_E AtCmd_ParseRcvData(uint8_t *ptr)
 					return resp;
 				}
 				msgSize = ptr - head;
-				RespBuffer[RespBuffer_Index] = (uint8_t *)malloc(msgSize+1);
+				RespBuffer[RespBuffer_Index] = (uint8_t *)malloc(msgSize+4);
 				if( RespBuffer[RespBuffer_Index] == NULL ){
 					ConsoleLog( "Out of memory!\r\n" );
 					rcv_state = ATCMD_FSM_START;
