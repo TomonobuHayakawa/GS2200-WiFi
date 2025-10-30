@@ -59,6 +59,8 @@ int TelitWiFi::begin(TWIFI_Params params, bool is_dhcp, TWIFI_Adress adrs)
 	char macid[20];
 	uint32_t start = millis();
 
+	m_params = params;
+
 	/* Try to read boot-up banner */
 	while( Get_GPIO37Status() ){
 		r = AtCmd_RecvResponse();
@@ -97,6 +99,7 @@ int TelitWiFi::begin(TWIFI_Params params, bool is_dhcp, TWIFI_Adress adrs)
 		r = AtCmd_VER();
 		if( ATCMD_RESP_OK != r ) continue;
 
+#if 0
 		/* Enable Power save mode */
 		/* AT+WRXACTIVE=0, AT+WRXPS=1 */
 		r = AtCmd_WRXACTIVE( params.psave );
@@ -104,6 +107,16 @@ int TelitWiFi::begin(TWIFI_Params params, bool is_dhcp, TWIFI_Adress adrs)
 
 		r = AtCmd_WRXPS(1);
 		if( ATCMD_RESP_OK != r ) continue;
+#endif
+
+		/* Enable Power save mode */
+		/* AT+WRXACTIVE=0, AT+WRXPS=1 */
+		r = AtCmd_WRXPS(1);
+		if( ATCMD_RESP_OK != r ) continue;
+
+		r = AtCmd_WRXACTIVE( 0 );
+		if( ATCMD_RESP_OK != r ) continue;
+
 
 		/* Set Wireless mode */
 		r = AtCmd_WM( params.mode );
@@ -172,6 +185,34 @@ int TelitWiFi::activate_station(const String& ssid, const String& passphrase)
 		/* Associate with AP */
 		r = AtCmd_WA( String(ssid).c_str(), "", 0 );
 		if( ATCMD_RESP_OK != r ) continue;
+
+		// DHCPŠ®—¹‘Ò‚¿iŠÈŒ‰ƒƒOj
+		ATCMD_NetworkStatus status;
+		uint32_t t0 = millis();
+
+		while (1) {
+			r = AtCmd_NSTAT(&status);
+
+			if (r == ATCMD_RESP_OK) {
+				if (status.addr.ipv4[0] | status.addr.ipv4[1] |
+					status.addr.ipv4[2] | status.addr.ipv4[3]) {
+					ConsolePrintf("DHCP OK: %d.%d.%d.%d\r\n",
+						status.addr.ipv4[0], status.addr.ipv4[1],
+						status.addr.ipv4[2], status.addr.ipv4[3]);
+					break;
+				} else {
+					ConsoleLog("DHCP waiting...");
+				}
+			} else {
+				ConsolePrintf("NSTAT error (%d)\r\n", r);
+			}
+
+			if (msDelta(t0) > 10000) {
+				ConsoleLog("DHCP timeout!");
+				return FAIL;
+			}
+			delay(500);
+		}
 
 		return OK;
 	}
@@ -326,7 +367,7 @@ char TelitWiFi::connectUDP(const String& ip, const String& port, const String& s
 	resp = AtCmd_NCUDP( String(ip).c_str(), String(port).c_str(), String(srcPort).c_str(), &cid);
 
 	if (resp != ATCMD_RESP_OK) {
-		ConsoleLog( "No Connect!" );
+		ConsolePrintf( "No Connect! = %d",resp );
 		delay(2000);
 		return cid;
 	}
@@ -407,13 +448,44 @@ bool TelitWiFi::connected(char cid)
 bool TelitWiFi::write(char cid, const uint8_t* data, uint16_t length)
 {
 	ATCMD_RESP_E resp;
+	ATCMD_NetworkStatus networkStatus;
 
 	resp = AtCmd_SendBulkData(cid, data, length);
-	if( ATCMD_RESP_OK != resp){
+	if( ATCMD_RESP_OK != resp ){
 		// Data is not sent, we need to re-send the data
 		gs2200_printf( "Send Error.resp = %d\n", resp);
-		version();
-		return false;
+
+		if (!version()) {
+
+	    	ConsoleLog("Module reset detected, waiting for READY...");
+
+    		if (AtCmd_WaitForReady(5000)) {
+		        ConsoleLog("READY detected after reset.");
+    		} else {
+				ConsoleLog("READY not detected (timeout)");
+				/* need reset commands.*/
+			}
+
+			begin(m_params);
+			return false;
+		}
+
+		AtCmd_SendCommand((char*)"AT+BDATA=0\r\n");
+
+		do {
+			resp = AtCmd_NSTAT(&networkStatus);
+		} while (ATCMD_RESP_OK != resp);
+
+		printf("IP: %d.%d.%d.%d\r\n", 
+		        networkStatus.addr.ipv4[0], networkStatus.addr.ipv4[1], networkStatus.addr.ipv4[2], networkStatus.addr.ipv4[3]);
+
+		if(networkStatus.addr.ipv4[0]+networkStatus.addr.ipv4[1]+networkStatus.addr.ipv4[2]+networkStatus.addr.ipv4[3] == 0){
+			stop(cid);
+			return false;
+		}
+
+		AtCmd_SendCommand((char*)"AT+BDATA=1\r\n");
+
 	}
 
 	return true;
@@ -426,6 +498,10 @@ bool TelitWiFi::version()
 
 	do{
 		resp = AtCmd_VER();
+		if(ATCMD_RESP_RESET_APP_SW == resp){
+			puts("Reseted!");
+			return false;
+		}
 	}while(ATCMD_RESP_OK != resp);
 	
 	return true;

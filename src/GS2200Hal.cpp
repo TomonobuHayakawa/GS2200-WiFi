@@ -50,6 +50,7 @@ uint32_t ESCBufferCnt = 0;
 
 uint8_t pendingDataFlag = 0;
 
+int8_t spi_cs = -1;
 
 /*---------------------------------------------------------------------------*
  * msDelta
@@ -71,11 +72,11 @@ uint32_t msDelta(uint32_t start)
 
 
 /*---------------------------------------------------------------------------*
- * Init_GS2200_SPI with type
+ * Init_GS2200_SPI with type and cs
  *---------------------------------------------------------------------------*
  * Function: Initialize GS2200 SPI
  *---------------------------------------------------------------------------*/
-void Init_GS2200_SPI_type(ModuleType type)
+void Init_GS2200_SPI_cs(ModuleType type, int8_t cs)
 {
 	switch(type) {
 	case iS110B_TypeC:
@@ -86,6 +87,12 @@ void Init_GS2200_SPI_type(ModuleType type)
 		puts("Is Your module iS110B_TypeA or iS110B_TypeB ?");
 		GPIO37 = 27;
 		break;
+	}
+
+	spi_cs = cs;
+	if(spi_cs>0){
+		pinMode(spi_cs, OUTPUT);
+		digitalWrite(spi_cs,HIGH);
 	}
 
 	/* Start the SPI library for GS2200 control*/
@@ -101,6 +108,16 @@ void Init_GS2200_SPI_type(ModuleType type)
 /*---------------------------------------------------------------------------*
  * Init_GS2200_SPI
  *---------------------------------------------------------------------------*
+ * Function: Initialize GS2200 SPI for compatibility
+ *---------------------------------------------------------------------------*/
+void Init_GS2200_SPI_type(ModuleType type)
+{
+	/* Start the SPI library for GS2200 control*/
+	Init_GS2200_SPI_cs(type, -1);
+
+}
+
+/*---------------------------------------------------------------------------*
  * Function: Initialize GS2200 SPI for compatibility
  *---------------------------------------------------------------------------*/
 void Init_GS2200_SPI(void)
@@ -174,17 +191,22 @@ static void SpiMakeHeader(uint8_t *buff, uint16_t dataLength, uint8_t request )
 static void Read_HeaderResponse(uint8_t* buff)
 {
     irqstate_t flags = enter_critical_section();
-	for(int i=0; i<HEADER_LENGTH; i++)
+	if(spi_cs>0) { digitalWrite(spi_cs,LOW); printf("cs=%d\n",spi_cs);}
+	for(int i=0; i<HEADER_LENGTH; i++){
 		*buff++ = SPI_DATA_TRANSFER(SPI_IDLE_CHAR);
-   leave_critical_section(flags);
+	}
+
+	if(spi_cs>0) { digitalWrite(spi_cs,HIGH); }
+    leave_critical_section(flags);
 }
 
 
 static void Write_Header(uint8_t* TxBuffer)
 {
     irqstate_t flags = enter_critical_section();
-	for(int i=0; i<HEADER_LENGTH; i++)
-		SPI_DATA_TRANSFER(*TxBuffer++);
+	if(spi_cs>0) { digitalWrite(spi_cs,LOW); }
+	SPI_DATA_TRANSFER(TxBuffer,HEADER_LENGTH);
+	if(spi_cs>0) { digitalWrite(spi_cs,HIGH); }
     leave_critical_section(flags);
 }
 
@@ -192,8 +214,9 @@ static void Write_Header(uint8_t* TxBuffer)
 static void Write_Header_Half(uint8_t* TxBuffer)
 {
     irqstate_t flags = enter_critical_section();
-	for(int i=0; i<HALF_HEADER_LENGTH; i++)
-		SPI_DATA_TRANSFER(*TxBuffer++);
+	if(spi_cs>0) { digitalWrite(spi_cs,LOW); }
+	SPI_DATA_TRANSFER(TxBuffer,HALF_HEADER_LENGTH);
+	if(spi_cs>0) { digitalWrite(spi_cs,HIGH); }
     leave_critical_section(flags);
 }
 
@@ -201,17 +224,21 @@ static void Write_Header_Half(uint8_t* TxBuffer)
 static void Write_Data(uint8_t* TxBuffer, uint16_t dataLen)
 {
     irqstate_t flags = enter_critical_section();
+	if(spi_cs>0) { digitalWrite(spi_cs,LOW); }
 	for(int i=0; i<dataLen; i++)
 		SPI_DATA_TRANSFER(*TxBuffer++);
 //		SPI_DATA_TRANSFER(TxBuffer,dataLen);
+	if(spi_cs>0) { digitalWrite(spi_cs,HIGH); }
     leave_critical_section(flags);
 }
 
 static void Read_Data(uint8_t* RxBuffer, uint16_t dataLen)
 {
     irqstate_t flags = enter_critical_section();
+	if(spi_cs>0) { digitalWrite(spi_cs,LOW); }
 	for(int i=0; i<dataLen; i++)
 		*RxBuffer++ = SPI_DATA_TRANSFER(SPI_IDLE_CHAR);
+	if(spi_cs>0) { digitalWrite(spi_cs,HIGH); }
     leave_critical_section(flags);
 }
 
@@ -225,59 +252,106 @@ static void Read_Data(uint8_t* RxBuffer, uint16_t dataLen)
  *---------------------------------------------------------------------------*/
 SPI_RESP_STATUS_E WiFi_Write(const void *txData, uint16_t dataLength)
 {
-	const uint8_t *tx = (uint8_t *)txData;
-	uint8_t spiHeaderBuff[8] = {0}, hiResponse[8]={0};
-	uint16_t recvLen;
-	uint32_t start = millis();
+    const uint8_t *tx = (const uint8_t *)txData;
+    uint8_t spiHeaderBuff[8] = {0};
+    uint8_t hiResponse[8]   = {0};
 
+    /* ---- 調整パラメータ ---- */
+    const uint32_t SPI_TIMEOUT_MS = 50;    // 1回の待ちでのタイムアウト（要環境調整）
+    const int      kMaxRetry       = 2;     // ヘッダ/応答のリトライ回数
+    const uint32_t kInitBackoffUs  = 2000;  // 2ms
+    const uint32_t kPollSleepUs    = 50;    // ポーリング間スリープ(過負荷防止)
+    const uint32_t kMaxPollIters   = 200000; // ループ上限（必ず脱出）
 
-	// Make HI Header
-	SpiMakeHeader(spiHeaderBuff, dataLength, WRITE_REQUEST);
+    /* millis() ラップアラウンド対応 */
+    auto elapsed_ms = [](uint32_t start)->uint32_t {
+        uint32_t now = millis();
+        return (now - start); /* unsigned 差分は自動でラップ対応 */
+    };
 
-    irqstate_t flags = enter_critical_section();
+    /* GPIO37(HOST INTERRUPT) が立つまで待つ */
+    auto wait_gpio37_with_timeout = [&](uint32_t timeout_ms)->bool {
+        uint32_t t0 = millis();
+        uint32_t iters = 0;
+        while (!Get_GPIO37Status()) {
+            if (elapsed_ms(t0) > timeout_ms) return false;
+            if (++iters >= kMaxPollIters)    return false; // フェイルセーフ
+            delayMicroseconds(kPollSleepUs);
+        }
+        return true;
+    };
 
-	// send first half of WRITE_REQUEST to GS2200	
-	Write_Header_Half(spiHeaderBuff);
-	// wait for at least 3.2usec
-	delayMicroseconds( 4 );
-	// send last half of WRITE_REQUEST to GS2200
-	Write_Header_Half(spiHeaderBuff+HALF_HEADER_LENGTH); 
-	// Wait for the response from GS2200
+    /* SPI再同期：CSの明示トグル、トランザクションやり直し */
+    auto reinit_spi = [&](){
+        SPI_PORT.endTransaction();
+        delayMicroseconds(50);
+        SPI_PORT.beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE));
+    };
 
-    leave_critical_section(flags);
+    uint32_t backoff_us = kInitBackoffUs;
 
-	while(!Get_GPIO37Status()){
-		if( msDelta(start) > SPI_TIMEOUT ){
-			return SPI_RESP_STATUS_TIMEOUT;}
-	}
+    for (int attempt = 0; attempt <= kMaxRetry; ++attempt) {
+        SpiMakeHeader(spiHeaderBuff, dataLength, WRITE_REQUEST);
 
-	// Read the response from GS2200
-	Read_HeaderResponse(hiResponse);
-	// Get the data length GS2200 can receive. This should be the same as requested
-	recvLen = hiResponse[6]<<8 | hiResponse[5];     
-	//check response for write_request and also the check the size of data GS2000 can receive
-	if((WRITE_RESPONSE_OK == hiResponse[1]) && (dataLength == recvLen) )
-	{	 
-		SpiMakeHeader(spiHeaderBuff, dataLength, DATA_FROM_MCU);  // make the data class(0x03) hearder
         irqstate_t flags = enter_critical_section();
 
-		Write_Header(spiHeaderBuff);                              // send the header
-		Write_Data((uint8_t*)tx, dataLength);                     // send the data to GS
+		// send first half of WRITE_REQUEST to GS2200	
+		Write_Header_Half(spiHeaderBuff);
+		// wait for at least 3.2usec
+		delayMicroseconds( 4 );
+		// send last half of WRITE_REQUEST to GS2200
+		Write_Header_Half(spiHeaderBuff+HALF_HEADER_LENGTH); 
+		// Wait for the response from GS2200
 
         leave_critical_section(flags);
-		return SPI_RESP_STATUS_OK;
-	}
-	else
-	{
+
+        bool ready = wait_gpio37_with_timeout(SPI_TIMEOUT_MS);
+        if (!ready) {
+            ConsoleLog("SPI WRITE: Timeout waiting GPIO37 (header response)");
+            reinit_spi();
+            if (attempt < kMaxRetry) {
+                delayMicroseconds(backoff_us);
+                backoff_us <<= 1;
+                continue;
+            }
+            return SPI_RESP_STATUS_TIMEOUT;
+        }
+
+        Read_HeaderResponse(hiResponse);
+        uint16_t recvLen = (uint16_t)((hiResponse[6] << 8) | hiResponse[5]);
+
+        if ((WRITE_RESPONSE_OK == hiResponse[1]) && (dataLength == recvLen)) {
+
+            SpiMakeHeader(spiHeaderBuff, dataLength, DATA_FROM_MCU);
+
+            flags = enter_critical_section();
+
+            Write_Header(spiHeaderBuff);
+            Write_Data((uint8_t *)tx, dataLength);
+
+            leave_critical_section(flags);
+
+            return SPI_RESP_STATUS_OK;
+        }
+
 #ifdef GS_DEBUG
-		ConsoleLog( "SPI WRITE: Incorrect Response" );
-		ConsolePrintf( "hiResponse[1]:0x%x\r\n", hiResponse[1] );
-		ConsolePrintf( "hiResponse[5]:0x%x\r\n", hiResponse[5] );
-		ConsolePrintf( "hiResponse[6]:0x%x\r\n", hiResponse[6] );
-		ConsolePrintf( "recvLen:%d\r\n", recvLen );
+        ConsoleLog("SPI WRITE: Incorrect Response");
+        ConsolePrintf("hiResponse[1]:0x%x\r\n", hiResponse[1]);
+        ConsolePrintf("hiResponse[5]:0x%x\r\n", hiResponse[5]);
+        ConsolePrintf("hiResponse[6]:0x%x\r\n", hiResponse[6]);
+        ConsolePrintf("recvLen:%u / expected:%u\r\n", (unsigned)recvLen, (unsigned)dataLength);
 #endif
-		return SPI_RESP_STATUS_ERROR;
-	}
+
+        reinit_spi();
+        if (attempt < kMaxRetry) {
+            delayMicroseconds(backoff_us);
+            backoff_us <<= 1;
+            continue;
+        }
+        return SPI_RESP_STATUS_ERROR;
+    }
+
+    return SPI_RESP_STATUS_ERROR;
 }
 
 /*-------------------------------------------------------------------------*
@@ -289,7 +363,13 @@ static uint16_t Read_DataLen(void)
 	uint8_t spiHeaderBuff[8] = {0}, hiResponse[8] = {0};
 	uint16_t respLength = 0, tempData = 0;
 	uint32_t start = millis();
-	
+
+    while (!Get_GPIO37Status()) {
+        if (msDelta(start) > SPI_TIMEOUT) {
+            return 0;
+        }
+    }
+
 	// Make HI Header
 	SpiMakeHeader(spiHeaderBuff, SPI_MAX_RECEIVED_DATA , READ_REQUEST);
 	// Send HI Header

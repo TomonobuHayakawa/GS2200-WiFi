@@ -113,6 +113,8 @@ public:
 	bool reset();
 	bool version();
 
+private:
+	TWIFI_Params m_params;
 };
 
 #endif /*_TELITWIFI_H_*/

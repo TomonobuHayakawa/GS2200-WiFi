@@ -302,6 +302,29 @@ void AtCmd_Init(void)
 	memset( RespBuffer[0], NULL, NUM_OF_RESPBUFFER );
 }
 
+/*---------------------------------------------------------------------------*
+ * AtCmd_SendCommand
+ *---------------------------------------------------------------------------*
+ * Description: Sends the AT command to GS2200, waits for a response.
+ *              Response is pushed into RxBuffer.
+ * Inputs: char *aString -- AT command to send
+ *---------------------------------------------------------------------------*/
+ATCMD_RESP_E AtCmd_SendCommand(char *command)
+{
+	SPI_RESP_STATUS_E s;
+
+#ifdef ATCMD_DEBUG_ENABLE
+	ConsolePrintf( ">%s\n", command );
+#endif
+
+	/* Send the command to GS2200 */
+	s = WiFi_Write((char *)command, strlen(command));
+
+	if( s == SPI_RESP_STATUS_OK )
+		return AtCmd_RecvResponse();
+	else
+		return ATCMD_RESP_SPI_ERROR;
+}
 
 
 /*------------------------------------  General Operations  ------------------------------------------*/
@@ -609,6 +632,33 @@ ATCMD_RESP_E AtCmd_WD(void)
 	return AtCmd_SendCommand( (char *)"AT+WD\r\n");
 }
 
+/*---------------------------------------------------------------------------*
+ * Function : AtCmd_WaitForReady
+ *---------------------------------------------------------------------------*
+ * Description : Wait until "READY" message from GS2200 module is received.
+ * Inputs  : timeout_ms - maximum wait time (ms)
+ * Return  : true if READY received, false otherwise
+ *---------------------------------------------------------------------------*/
+bool AtCmd_WaitForReady(uint32_t timeout_ms)
+{
+    uint32_t start = millis();
+    extern uint8_t RxBuffer[];   // ← 既存の受信バッファ（他の関数でも使ってるはず）
+
+    while (msDelta(start) < timeout_ms) {
+        ATCMD_RESP_E resp = AtCmd_RecvResponse();  // 受信処理を進める
+        if (resp == ATCMD_RESP_OK ||
+            resp == ATCMD_RESP_ERROR ||
+            resp == ATCMD_RESP_RESET_APP_SW) {
+            // RxBuffer内に"READY"があるかチェック
+            if (strstr((char *)RxBuffer, "READY")) {
+                return true;
+            }
+        }
+        delay(50);
+    }
+
+    return false;
+}
 
 /*--------------------------------  Layer 3/4 Operations  -------------------------------------*/
 
@@ -960,7 +1010,7 @@ ATCMD_RESP_E AtCmd_PSSTBY(uint32_t x, uint32_t delay, uint8_t alarm1_pol, uint8_
 	WiFi_Write( cmd, strlen(cmd) );
 
 	while( !Get_GPIO37Status() );
-	
+
 	return AtCmd_RecvResponse();
 
 }
@@ -985,33 +1035,7 @@ ATCMD_RESP_E AtCmd_RESTORENWCONN(void)
 	return AtCmd_SendCommand( (char *)"AT+RESTORENWCONN\r\n");
 }
 
-
-
 /*--------------------------------  Command - Response  -----------------------------------------*/
-
-/*---------------------------------------------------------------------------*
- * AtCmd_SendCommand
- *---------------------------------------------------------------------------*
- * Description: Sends the AT command to GS2200, waits for a response.
- *              Response is pushed into RxBuffer.
- * Inputs: char *aString -- AT command to send
- *---------------------------------------------------------------------------*/
-ATCMD_RESP_E AtCmd_SendCommand(char *command)
-{
-	SPI_RESP_STATUS_E s;
-
-#ifdef ATCMD_DEBUG_ENABLE
-	ConsolePrintf( ">%s\n", command );
-#endif
-
-	/* Send the command to GS2200 */
-	s = WiFi_Write((char *)command, strlen(command));
-
-	if( s == SPI_RESP_STATUS_OK )
-		return AtCmd_RecvResponse();
-	else
-		return ATCMD_RESP_SPI_ERROR;
-}
 
 /*---------------------------------------------------------------------------*
  * AtCmd_checkResponse
@@ -1313,6 +1337,7 @@ ATCMD_RESP_E AtCmd_RecvResponse(void)
 	s = WiFi_Read( RxBuffer, &rxDataLen );
 
 	if( s == SPI_RESP_STATUS_TIMEOUT ){
+		ConsoleLog("SPI: Timeout");
 #ifdef ATCMD_DEBUG_ENABLE
 		ConsoleLog("SPI: Timeout");
 #endif
@@ -1320,6 +1345,7 @@ ATCMD_RESP_E AtCmd_RecvResponse(void)
 	}
 	
 	if( s == SPI_RESP_STATUS_ERROR ){
+		ConsoleLog("GS2200 responds Zero data length");
 #ifdef ATCMD_DEBUG_ENABLE
 		/* Zero data length, this should not happen */
 		ConsoleLog("GS2200 responds Zero data length");
@@ -1335,7 +1361,7 @@ ATCMD_RESP_E AtCmd_RecvResponse(void)
 
 #ifdef ATCMD_DEBUG_ENABLE
 	ConsolePrintf( "GS Response: %d\r\n", resp );
-#endif    
+#endif
 	return resp;
 
 }	
@@ -2043,7 +2069,6 @@ ATCMD_RESP_E AtCmd_LOGLVL(int level)
 	resp = AtCmd_SendCommand( cmd );
 	return resp;
 }
-
 
 /*-------------------------------------------------------------------------*
  * End of File:  AtCmd.cpp

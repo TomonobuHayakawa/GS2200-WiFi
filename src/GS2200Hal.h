@@ -48,6 +48,7 @@ typedef enum {
 uint32_t msDelta(uint32_t start);
 void Init_GS2200_SPI(void);
 void Init_GS2200_SPI_type(ModuleType type);
+void Init_GS2200_SPI_cs(ModuleType type, int8_t cs);
 
 int Get_GPIO37Status(void);
 

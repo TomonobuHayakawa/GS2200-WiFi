@@ -272,6 +272,8 @@ ATCMD_RESP_E AtCmd_LOGLVL(int level);
 
 ATCMD_RESP_E AtCmd_RecieveMQTTData( String& topic );
 
+bool AtCmd_WaitForReady(uint32_t timeout_ms);
+
 #endif /* _GS_ATCMD_H_ */
 
 
